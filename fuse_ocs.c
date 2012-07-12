@@ -173,10 +173,14 @@ ocs_getattr(const char *path, struct stat *stbuf)
 	stbuf->st_size = get_int_value (payload, "size");
 	if (strcmp (type, "dir") == 0) {
 		    stbuf->st_mode = S_IFDIR | 0755;
-    		stbuf->st_nlink = 2;
+		    stbuf->st_uid = 1001;
+		    stbuf->st_gid = 100;
+    		    stbuf->st_nlink = 2;
 	} else if (strcmp (type, "file") == 0) {
-		    stbuf->st_mode = S_IFREG | 0644;
-    		stbuf->st_nlink = 1;
+		    stbuf->st_mode = S_IFREG | 0666;
+    		    stbuf->st_nlink = 1;
+		    stbuf->st_uid = 1001;
+		    stbuf->st_gid = 100;
 	} else
 	    res = -ENOENT;
 	g_free (type);
@@ -235,6 +239,24 @@ static int ocs_link(const char *from, const char *to)
 {
 	log_path (__FUNCTION__, from);
 	log_path (__FUNCTION__, to);
+	int res;
+	gchar *payload;
+	gchar *status;
+    	payload = get_payload ("s3/link", "POST", 
+			"from", from,
+		      	"to", to,
+			NULL);
+    	status = get_string_value (payload, "status");
+
+	res = -1;
+	if (status) {
+		if (strcmp (status, "ok") == 0) {
+			res = 0;
+		}
+		g_free (status);
+	}
+	if (payload)
+		g_free (payload);
 	return 0;
 }
 
