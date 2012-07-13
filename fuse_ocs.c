@@ -22,7 +22,7 @@
 #include <json-glib/json-glib.h>
  
 #define LOG_PATH	log_path (__FUNCTION__, path)
-void log_path (char *call, char *path)
+void log_path (const char *call, const char *path)
 {
     char cmd[1024];
     snprintf (cmd, 1024, "echo '%s %s' | tee -a /tmp/dl_ocs", call, path);
@@ -65,6 +65,7 @@ out:
 }
 
 //TODO: better api?
+//FIXME: if not key value, popup an error
 gchar *
 get_string_value (gchar *data, gchar *key)
 {
@@ -121,6 +122,27 @@ out:
     g_object_unref (reader);
 
     return val;
+}
+
+gint
+get_errno (gchar *payload)
+{
+	gchar *status;
+	gint res;
+
+    status = get_string_value (payload, "status");
+    if (status) {
+		if (strcmp (status, "ok") == 0) {
+		    res = 0;
+		} else {
+		    res = get_int_value (payload, "errno");
+		}
+		g_free (status);
+    } else {
+		res = -1;
+	}
+
+	return res;
 }
 
 GList *
@@ -198,179 +220,178 @@ static int ocs_access(const char *path, int mask)
 {
 	log_path (__FUNCTION__, path);
     int res;
+    //NOT done in server
 	return 0;
 }
 
 static int ocs_readlink(const char *path, char *buf, size_t size)
 {
 	log_path (__FUNCTION__, path);
+	//NOT done in server
 	return 0;
 }
 
 static int ocs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	log_path (__FUNCTION__, path);
-	int res;
+	gint res;
 	gchar *payload;
-	gchar *status;
-    	payload = get_payload ("s3/nod", "POST", "url", path, NULL);
-    	status = get_string_value (payload, "status");
+   
+	payload	= get_payload ("s3/nod", "POST", "url", path, NULL);
+	res = get_errno (payload);
+	g_free (payload);
 
-	res = -1;
-	if (status) {
-		if (strcmp (status, "ok") == 0) {
-			res = 0;
-		}
-		g_free (status);
-	}
-	if (payload)
-		g_free (payload);
-	return 0;
+	return res;
 }
 
 static int ocs_symlink(const char *from, const char *to)
 {
 	log_path (__FUNCTION__, from);
 	log_path (__FUNCTION__, to);
-	return 0;
+	gint res;
+	gchar *payload;
+
+    payload = get_payload ("s3/symlink", "POST", "from", from, "to", to, NULL);
+	res = get_errno (payload);
+	g_free (payload);
+
+	return res;
 }
 
 static int ocs_link(const char *from, const char *to)
 {
 	log_path (__FUNCTION__, from);
 	log_path (__FUNCTION__, to);
-	int res;
+	gint res;
 	gchar *payload;
-	gchar *status;
-    	payload = get_payload ("s3/link", "POST", 
-			"from", from,
-		      	"to", to,
-			NULL);
-    	status = get_string_value (payload, "status");
 
-	res = -1;
-	if (status) {
-		if (strcmp (status, "ok") == 0) {
-			res = 0;
-		}
-		g_free (status);
-	}
-	if (payload)
-		g_free (payload);
-	return 0;
+    payload = get_payload ("s3/link", "POST", "from", from, "to", to, NULL);
+	res = get_errno (payload);
+	g_free (payload);
+
+	return res;
 }
 
 static int ocs_chmod(const char *path, mode_t mode)
 {
 	log_path (__FUNCTION__, path);
- 	return 0;
+
+	gint res;
+	gchar *payload;
+	gchar *c_mode;
+
+	c_mode = g_strdup_printf ("%d", mode);
+    payload = get_payload ("s3/chmod", "POST", "url", path,	"mode", c_mode,	NULL);
+	res = get_errno (payload);
+	g_free (c_mode);
+	g_free (payload);
+
+	return res;
 }
 
 static int ocs_chown(const char *path, uid_t uid, gid_t gid)
 {
 	log_path (__FUNCTION__, path);
-	int res;
 
-	return 0;
+	gint res;
+	gchar *payload;
+	gchar *c_uid;
+	gchar *c_gid;
+
+	c_uid = g_strdup_printf ("%d", uid);
+	c_gid = g_strdup_printf ("%d", gid);
+   	payload = get_payload ("s3/chown", "POST", "url", path, "uid", c_uid, "gid", c_gid,	NULL);
+	res = get_errno (payload);
+	g_free (c_uid);
+	g_free (c_gid);
+	g_free (payload);
+
+ 	return res;
 }
 
 static int ocs_truncate(const char *path, off_t size)
 {
 	log_path (__FUNCTION__, path);
-	int res;
+	gint res;
 	gchar *payload;
-	gchar *status;
 	gchar *c_size;
-	c_size = g_strdup_printf ("%d", size);
-    	payload = get_payload ("s3/truncate", "POST", 
-				"url", path, 
-				"size", c_size, 
-				NULL);
-    	status = get_string_value (payload, "status");
 
-	res = -1;
-	if (status) {
-		if (strcmp (status, "ok") == 0) {
-			res = 0;
-		}
-		g_free (status);
-	}
-	if (payload)
-		g_free (payload);
-	return 0;
+	c_size = g_strdup_printf ("%d", size);
+    payload = get_payload ("s3/truncate", "POST", "url", path, "size", c_size, NULL);
+	res = get_errno (payload);
+	g_free (c_size);
+	g_free (payload);
+
+	return res;
 }
 
 static int ocs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
 {
 	log_path (__FUNCTION__, path);
+	gint res;
     gchar *payload;
     GList *l, *files;
     gchar *name;
 
     payload = get_payload ("s3/file", "GET", "url", path, NULL);
-    files = get_file_list (payload);
+	res = get_errno (payload);
+	if (res == 0) {
+	    files = get_file_list (payload);
+		filler(buf, ".", NULL, 0);
+		filler(buf, "..", NULL, 0);
+    	for (l = files; l; l=l->next) {
+			name = l->data;
+	    	filler(buf, name, NULL, 0);
+			g_free (name);
+    	}
+	    g_list_free (files);
+	}
+	g_free (payload);
 
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
-    for (l = files; l; l=l->next) {
-	name = l->data;
-	    filler(buf, name, NULL, 0);
-	g_free (name);
-    }
-    g_list_free (files);
-
-	return 0;
+	return res;
 }
 
 static int ocs_mkdir(const char *path, mode_t mode)
 {
 	log_path (__FUNCTION__, path);
-    gchar *payload = get_payload ("s3/dir", "POST", "url", path, NULL);
-    gchar *status = get_string_value (payload, "status");
 
-    if (payload)
+	gint res;
+    gchar *payload;
+   
+	payload	= get_payload ("s3/dir", "POST", "url", path, NULL);
+	res = get_errno (payload);
 	g_free (payload);
-    if (status) {
-	if (strcmp (status, "ok") == 0)
-	    return 0;
-    }
 	
-    return -1;
+    return res;
 }
 
 static int ocs_rmdir(const char *path)
 {
 	log_path (__FUNCTION__, path);
     /*I want to use DELETE, but this file server did not use file url in the body/params*/
-    gchar *payload = get_payload ("s3/rmdir", "POST", "url", path, NULL);
-    gchar *status = get_string_value (payload, "status");
+	gint res;
+    gchar *payload;
 
-    if (payload)
+	payload = get_payload ("s3/rmdir", "POST", "url", path, NULL);
+	res = get_errno (payload);
 	g_free (payload);
-    if (status) {
-	if (strcmp (status, "ok") == 0)
-	    return 0;
-    }
 	
-    return -1;
+    return res;
 }
 
 static int ocs_unlink (const char *path)
 {
 	log_path (__FUNCTION__, path);
     /*I want to use DELETE, but this file server did not use file url in the body/params*/
-    gchar *payload = get_payload ("s3/rmfile", "POST", "url", path, NULL);
-    gchar *status = get_string_value (payload, "status");
+	gint res;
+    gchar *payload;
 
-    if (payload)
+    payload	= get_payload ("s3/rmfile", "POST", "url", path, NULL);
+	res = get_errno (payload);
 	g_free (payload);
-    if (status) {
-	if (strcmp (status, "ok") == 0)
-	    return 0;
-    }
 	
-    return -1;
+    return res;
 }
 
 static int ocs_utimens(const char *path, const struct timespec ts[2])
@@ -384,33 +405,43 @@ static int ocs_rename (const char *from, const char *to)
     log_path (__FUNCTION__, from);
     log_path (__FUNCTION__, to);
     /*I want to use DELETE, but this file server did not use file url in the body/params*/
-    gchar *payload = get_payload ("s3/rename", "POST", "from", from, "to", to, NULL);
-    gchar *status = get_string_value (payload, "status");
+	gint res;
+    gchar *payload;
 
-    if (payload)
+    payload	= get_payload ("s3/rename", "POST", "from", from, "to", to, NULL);
+    res = get_errno (payload);
 	g_free (payload);
-    if (status) {
-	if (strcmp (status, "ok") == 0)
-	    return 0;
-    }
-	
-	return 0;
-    return -1;
+
+    return res;
 }
 
 static int ocs_open(const char *path, struct fuse_file_info *fi)
 {
     log_path ("ocs_open", path);
-	return 0;
+    log_path (__FUNCTION__, path);
+
+	gint res;
+    gchar *c_flags;
+	gchar *payload;
+
+    c_flags = g_strdup_printf ("%d", fi->flags);
+    payload = get_payload ("s3/open", "POST", "url", path, "flags", c_flags, NULL);
+	res = get_errno (payload);
+    g_free (c_flags);
+	g_free (payload);
+
+    return res;
 }
 
 static int ocs_read(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi)
 {
-    size_t len;
     log_path ("ocs_read", path);
 //TODO: this is so important ... And need to make a cache 
-    gchar *payload = get_payload ("s3/file", "GET", "url", path, NULL);
+    size_t len;
+    gchar *payload;
+
+    payload = get_payload ("s3/file", "GET", "url", path, NULL);
     len = strlen (payload);
     if (offset < len) {
 		if (offset + size > len)
@@ -427,7 +458,7 @@ static int ocs_write(const char *path, const char *buf, size_t size,
 	             off_t offset, struct fuse_file_info *fi)
 {
     log_path ("ocs_write", path);
-    int res = 0;
+    gint res;
     gchar *c_size, *c_offset;
     gchar *data;
     gchar *payload;
@@ -442,19 +473,12 @@ static int ocs_write(const char *path, const char *buf, size_t size,
 					"size", c_size,
 					"offset", c_offset,
 					NULL);
+	res = get_errno (payload);
     g_free (data);
     g_free (c_size);
     g_free (c_offset);
-
-    gchar *status = get_string_value (payload, "status");
-
-    if (status) {
-	if (strcmp (status, "ok") == 0) {
-	    res = get_int_value (payload, "size");
-	}
-    }
-    if (payload)
 	g_free (payload);
+
     return res;
 }
 
