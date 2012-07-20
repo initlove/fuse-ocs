@@ -530,5 +530,6 @@ static struct fuse_operations ocs_oper = {
 int main(int argc, char *argv[])
 {
     g_type_init ();
-	return fuse_main(argc, argv, &ocs_oper, NULL);
+
+    return fuse_main(argc, argv, &ocs_oper, NULL);
 }
